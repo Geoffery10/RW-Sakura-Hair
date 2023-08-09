@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Manifest>
+  <identifier>Sakura's Hair</identifier>
+  <version>1.4.0.1</version>
+  <incompatibleWith />
+  <loadBefore>
+  </loadBefore>
+  <loadAfter>
+  </loadAfter>
+  <showCrossPromotions>false</showCrossPromotions>
+</Manifest>
