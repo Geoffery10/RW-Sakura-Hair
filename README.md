@@ -12,9 +12,17 @@ RimWorld 1.0 through 1.7. Per-version notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Installation
 
+**Steam Workshop**
+
 1. Download on the [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3007906745)
 2. Enable the mod in the mod menu in the game
 3. Enjoy!
+
+**Manual install**
+
+1. Download the zip from [releases/latest](https://github.com/Geoffery10/RW-Sakura-Hair/releases/latest)
+2. Unzip it into `RimWorld/Mods`, so you end up with `Mods/SakurasHair/About/About.xml`
+3. Enable the mod in the mod menu in the game
 
 ## Textures
 
