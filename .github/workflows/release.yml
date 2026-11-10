@@ -27,8 +27,50 @@ jobs:
       - name: Build release package
         run: python3 scripts/package_mod.py .
 
+      - name: Check tag against Manifest version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          manifest=$(python3 -c "import xml.etree.ElementTree as ET; print((ET.parse('About/Manifest.xml').getroot().findtext('version') or '').strip())")
+          echo "tag=$tag manifest=$manifest"
+          if [ "$tag" != "$manifest" ]; then
+            echo "::warning::tag $tag does not match About/Manifest.xml version $manifest"
+          fi
+
+      - name: Guard package size
+        # A clean build is ~0.3 MB. Anything near this budget means source art
+        # or .git crept into the staging folder.
+        run: |
+          size=$(stat -c%s dist/*.zip)
+          echo "package: $(ls -1 dist/*.zip) = $size bytes"
+          {
+            echo "### Release package"
+            echo ""
+            echo '```'
+            unzip -l dist/*.zip
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$size" -gt 2000000 ]; then
+            echo "::error::package is $size bytes, over the 2 MB budget; something that should not ship got in"
+            exit 1
+          fi
+
+      - name: Write checksums
+        run: |
+          cd dist
+          sha256sum ./*.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
-          generate_release_notes: true
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
           fail_on_unmatched_files: true
+          body: |
+            Manual install: unzip into `RimWorld/Mods`, then enable Sakura's Hair in the mod list.
+
+            Contains only the files the game loads (`About/`, versioned def folders, `Textures/`).
+            Source art in `PSD/` stays in the repository and is not part of this download.
+
+            Checksums are in `SHA256SUMS.txt`.
