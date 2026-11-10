@@ -24,7 +24,23 @@ INCLUDE_DIRS = {
 }
 INCLUDE_FILES = {"LoadFolders.xml"}
 EXCLUDE_NAMES = {".git", ".github", "scripts", "dist", "PSD", "Source", ".vs", "bin", "obj", "__pycache__"}
+# Source art must never ship to players; Steam reports item size, so this is visible.
+SOURCE_ART_SUFFIXES = {".psd", ".psb", ".xcf", ".kra", ".blend", ".ai"}
 VERSION_DIR = __import__("re").compile(r"^\d+\.\d+$")
+
+
+def verify_staging(staging: Path) -> None:
+    """Fail the build if anything that must not ship made it into the package."""
+    problems: list[str] = []
+    for path in staging.rglob("*"):
+        if path.name in {".git", "__pycache__"}:
+            problems.append(f"forbidden entry {path.relative_to(staging)}")
+        elif path.suffix.lower() in SOURCE_ART_SUFFIXES:
+            problems.append(f"source art {path.relative_to(staging)}")
+    if problems:
+        for line in problems:
+            print(f"ERROR: {line}", file=sys.stderr)
+        raise SystemExit("staging folder contains files that must not be uploaded")
 
 
 def mod_version(mod_root: Path) -> str:
@@ -71,6 +87,14 @@ def build(mod_root: Path, folder_name: str, out_dir: Path) -> tuple[Path, Path]:
     if not (staging / "About" / "About.xml").is_file():
         raise SystemExit("refusing to package: About/About.xml did not make it into the staging folder")
 
+    verify_staging(staging)
+
+    staging_bytes = sum(p.stat().st_size for p in staging.rglob("*") if p.is_file())
+    repo_bytes = sum(
+        p.stat().st_size for p in mod_root.rglob("*")
+        if p.is_file() and ".git" not in p.parts and "dist" not in p.parts
+    )
+
     archive = out_dir / f"{folder_name}-{mod_version(mod_root)}.zip"
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
         for path in sorted(staging.rglob("*")):
@@ -78,7 +102,8 @@ def build(mod_root: Path, folder_name: str, out_dir: Path) -> tuple[Path, Path]:
                 zf.write(path, f"{folder_name}/{path.relative_to(staging)}")
 
     size_mb = archive.stat().st_size / 1_048_576
-    print(f"staging : {staging} ({copied} files)")
+    print(f"staging : {staging} ({copied} files, {staging_bytes / 1_048_576:.2f} MB)")
+    print(f"repo    : {repo_bytes / 1_048_576:.2f} MB of files (source art stays in git, only the staging folder is uploaded)")
     print(f"archive : {archive} ({size_mb:.2f} MB)")
     return staging, archive
 
