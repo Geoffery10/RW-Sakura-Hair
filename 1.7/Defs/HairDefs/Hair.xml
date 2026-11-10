@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Defs>
+<HairDef>
+    <label>Sakura</label>
+    <styleGender>Female</styleGender>
+    <texPath>Hair/Sakura</texPath>
+    <defName>Sakura</defName>
+	<styleTags>
+		<li>Rural</li>
+	</styleTags>
+  </HairDef>
+</Defs>

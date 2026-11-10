@@ -1,0 +1,105 @@
+name: publish-workshop
+
+# Manual only. Requires a self-hosted runner that has SteamCMD and is already
+# logged in as the Workshop item owner (Geoffery10). Only that account can
+# update item 3007906745.
+#
+# One-time setup on the runner:
+#   steamcmd +login <owner_account> +quit        # interactive, caches a sentry
+#   # then confirm subsequent runs do not ask again
+#
+# Deliberately NOT on a GitHub-hosted runner: Steam would demand Steam Guard on
+# a fresh machine every run, and game/account credentials do not belong in a
+# cloud runner.
+
+on:
+  workflow_dispatch:
+    inputs:
+      changenote:
+        description: "Workshop change note (shown in the item changelog)"
+        required: true
+        type: string
+      visibility:
+        description: "0 = public, 1 = friends only, 2 = private, 3 = unlisted"
+        required: false
+        default: "0"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    name: upload to Steam Workshop
+    runs-on: [self-hosted, steam]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate before uploading anything
+        run: python3 scripts/validate_mod.py .
+
+      - name: Build staging folder
+        run: python3 scripts/package_mod.py .
+
+      - name: Write workshop build file
+        # RISK: this vdf deliberately omits "description" and "tags".
+        #   - Supplying an empty description can clear the live Workshop text
+        #     (which is longer than About.xml's one-liner). Omitting it normally
+        #     leaves the existing description alone, but verify on the first run.
+        #   - Workshop version tags ("Mod", "1.7") are set by the in-game
+        #     uploader from supportedVersions. steamcmd does not reliably map
+        #     them, so leave tags out and confirm the tag on the item page.
+        # If either comes out wrong, do one upload from the in-game uploader
+        # and keep steamcmd for file/changenote updates after that.
+        env:
+          CHANGENOTE: ${{ inputs.changenote }}
+          VISIBILITY: ${{ inputs.visibility }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib
+          mod_root = pathlib.Path(".").resolve()
+          staging = (mod_root / "dist" / "SakurasHair").as_posix()
+          title = "Sakura's Hair"
+          about = (mod_root / "About" / "About.xml").read_text(encoding="utf-8-sig")
+          # description text is kept in About.xml; Workshop uses the item's own
+          # description, so only send a change note here.
+          vdf = f'''"workshopitem"
+          {{
+            "appid"           "294100"
+            "publishedfileid" "3007906745"
+            "contentfolder"   "{staging}"
+            "previewfile"     "{mod_root.as_posix()}/About/Preview.png"
+            "visibility"      "{os.environ['VISIBILITY']}"
+            "title"           "{title}"
+            "changenote"      "{os.environ['CHANGENOTE']}"
+          }}
+          '''
+          pathlib.Path("dist/workshop.vdf").write_text(vdf, encoding="utf-8")
+          print(vdf)
+          PY
+
+      - name: steamcmd upload
+        run: |
+          steamcmd +login "$STEAM_ACCOUNT" \
+                   +workshop_build_item "$PWD/dist/workshop.vdf" \
+                   +quit
+        env:
+          STEAM_ACCOUNT: ${{ vars.STEAM_ACCOUNT }}
+
+      - name: Verify the item page picked up the change
+        run: |
+          page="https://steamcommunity.com/sharedfiles/filedetails/changelog/3007906745"
+          for attempt in 1 2 3 4 5; do
+            if curl -fsS "$page" | grep -qF "${{ inputs.changenote }}"; then
+              echo "change note is live on the Workshop page"
+              exit 0
+            fi
+            echo "not visible yet (attempt $attempt), waiting 20s"
+            sleep 20
+          done
+          echo "::error::upload finished but the change note never appeared; check the item manually"
+          exit 1

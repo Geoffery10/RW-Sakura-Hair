@@ -1,0 +1,38 @@
+name: validate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mod-checks:
+    name: mod checks (no game needed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate mod files
+        # Drop --strict once the two known warnings (short description,
+        # 638x358 Preview.png) are cleared.
+        run: python3 scripts/validate_mod.py .
+
+      - name: Build release package
+        run: python3 scripts/package_mod.py .
+
+      - name: Show package contents (top level)
+        run: unzip -l dist/*.zip | head -30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mod-package
+          path: dist/*.zip
+          if-no-files-found: error
